@@ -168,7 +168,6 @@ ls -la models/
 # Seharusnya ada file seperti:
 # - yolo-skin.onnx (recommended)
 # - best-skin.pt (alternative)
-# - skin-best.pt (alternative)
 ```
 
 Jika model belum ada, download dari repository atau path yang sesuai.
@@ -309,7 +308,6 @@ flask_skin_classifier/
 ├── models/                        # AI Model files (large files, not in repo)
 │   ├── yolo-skin.onnx            # ONNX format (recommended - fast)
 │   ├── best-skin.pt              # PyTorch format (alternative)
-│   └── skin-best.pt              # PyTorch format (alternative)
 │
 └── __pycache__/                   # Python cache (auto-generated, ignore)
 ```

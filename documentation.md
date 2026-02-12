@@ -414,7 +414,6 @@ flask_skin_classifier/
 │
 └── models/
     ├── best-skin.pt               # YOLOv8 models
-    ├── skin-best.pt
     └── yolo-skin.onnx
 ```
 

@@ -145,10 +145,11 @@ Thumbs.db
 dataset/
 models/*.h5
 models/*.pkl
-models/*.pt
+# models/*.pt
 models/*.pth
 models/*.keras
 models/*.onnx
 !models/.keep
 
 static/uploads/*
+.claude
