@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const previewImage = document.getElementById('preview-image');
     const uploadPlaceholder = document.getElementById('upload-placeholder');
     const analyzeBtn = document.getElementById('analyze-btn');
-    const resultContainer = document.getElementById('result-container');
+    const removeBtn = document.getElementById('remove-btn');
     const scanOverlay = document.getElementById('scan-overlay');
 
     // Result Elements
@@ -19,10 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const confidenceRing = document.getElementById('confidence-ring');
     const severityIndicator = document.getElementById('severity-indicator');
     const severityText = document.getElementById('severity-text');
-    const actionText = document.getElementById('action-text'); // Fixed ID
+    const actionText = document.getElementById('action-text');
     const probabilityBars = document.getElementById('probability-bars');
 
-    const CIRCUMFERENCE = 2 * Math.PI * 40; // r=40
+    const CIRCUMFERENCE = 2 * Math.PI * 40;
     confidenceRing.style.strokeDasharray = `${CIRCUMFERENCE} ${CIRCUMFERENCE}`;
     confidenceRing.style.strokeDashoffset = CIRCUMFERENCE;
 
@@ -68,12 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.onload = (e) => {
             previewImage.src = e.target.result;
             previewContainer.classList.remove('hidden');
-            uploadPlaceholder.classList.add('opacity-0'); // Fade out placeholder
-
-            // Generate basic slide-up animation
-            previewImage.classList.add('animate-slide-up');
-
-            // Reset Results
+            uploadPlaceholder.classList.add('opacity-0');
             resetResults();
         };
         reader.readAsDataURL(file);
@@ -114,21 +109,78 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 3. UI Helpers
+    // 3. Remove Image
+    removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent opening upload dialog
+        removeImage();
+    });
+
+    // Keyboard support for remove button
+    removeBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            removeImage();
+        }
+    });
+
+    function removeImage() {
+        if (!currentFile && !previewImage.src) return;
+
+        // Reset State
+        currentFile = null;
+        imageUpload.value = ''; // Clear file input (critical for re-uploading same file)
+
+        // Reset UI with animation
+        previewImage.classList.add('scale-95', 'opacity-0');
+
+        setTimeout(() => {
+            previewImage.src = '';
+            previewImage.classList.remove('scale-95', 'opacity-0');
+            previewContainer.classList.add('hidden');
+            uploadPlaceholder.classList.remove('opacity-0');
+
+            // Show Toast
+            showToast('Image removed. Ready for new upload.');
+        }, 200);
+
+        // Deep Reset of Analysis
+        resetResults();
+        setLoading(false);
+    }
+
+    // Toast Logic
+    const toastContainer = document.getElementById('toast-container');
+    const toastMessage = document.getElementById('toast-message');
+    let toastTimeout;
+
+    window.hideToast = function () {
+        toastContainer.classList.add('translate-x-full', 'opacity-0');
+    }
+
+    function showToast(msg) {
+        toastMessage.textContent = msg;
+        toastContainer.classList.remove('translate-x-full', 'opacity-0');
+
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+            hideToast();
+        }, 3000);
+    }
+
+    // 4. UI Helpers
     function setLoading(isLoading) {
         if (isLoading) {
             analyzeBtn.disabled = true;
-            analyzeBtn.innerHTML = '<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processing...';
+            analyzeBtn.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processing...';
 
-            scanOverlay.classList.remove('hidden'); // Show scan line
+            scanOverlay.classList.remove('hidden');
 
             emptyState.classList.add('hidden');
             resultContent.classList.add('hidden');
             loadingState.classList.remove('hidden');
         } else {
             analyzeBtn.disabled = false;
-            analyzeBtn.innerHTML = `<span>Analyze Image</span>`; // Restore btn text (simplified)
-            // Ideally fetch translation for button text again, but keeping simple for now
+            analyzeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg><span>Analyze</span>`;
 
             scanOverlay.classList.add('hidden');
             loadingState.classList.add('hidden');
@@ -136,9 +188,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function resetResults() {
+        // Hide results
         emptyState.classList.remove('hidden');
         resultContent.classList.add('hidden');
         loadingState.classList.add('hidden');
+
+        // Deep Clean Text & Values
+        confidenceValue.textContent = '0%';
+        setProgress(0);
+
+        diagnosisName.textContent = 'Diagnosis Name';
+        diagnosisDesc.textContent = 'Description will appear here after analysis.';
+
+        severityText.textContent = '-';
+        severityIndicator.className = 'w-2.5 h-2.5 rounded-full bg-gray-600';
+
+        actionText.textContent = '-';
+
+        probabilityBars.innerHTML = ''; // Clear prior bars
     }
 
     function setProgress(percent) {
@@ -147,17 +214,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function displayResults(result) {
-        setLoading(false); // Stop loading animation first
+        setLoading(false);
 
-        // 1. Smart Confidence Logic
+        // 1. Confidence
         let rawConf = parseFloat(result.confidence) * 100;
         let displayConf = rawConf;
-        let label = "High Confidence";
 
         if (rawConf > 99.0) {
-            displayConf = 99; // Cap visual number
-            label = "Very High (>99%)";
-            confidenceValue.innerHTML = `99<span class="text-sm align-top">+</span>%`;
+            displayConf = 99;
+            confidenceValue.innerHTML = `99<span class="text-xs align-top">+</span>%`;
         } else {
             confidenceValue.textContent = `${displayConf.toFixed(1)}%`;
         }
@@ -170,39 +235,35 @@ document.addEventListener('DOMContentLoaded', () => {
         diagnosisDesc.textContent = result.description;
 
         // 4. Badges
-        // Severity Color Mapping
         const severityMap = {
-            'Mild': 'bg-green-500',
-            'Moderate': 'bg-yellow-500',
-            'Severe': 'bg-red-500',
-            'Critical': 'bg-red-700'
+            'Mild': 'bg-green-500', 'Ringan': 'bg-green-500',
+            'Moderate': 'bg-yellow-500', 'Sedang': 'bg-yellow-500',
+            'Severe': 'bg-red-500', 'Parah': 'bg-red-500',
+            'Variable': 'bg-blue-500', 'Bervariasi': 'bg-blue-500',
+            'Chronic': 'bg-orange-500', 'Kronis': 'bg-orange-500',
+            'Moderate to Chronic': 'bg-yellow-500', 'Sedang hingga Kronis': 'bg-yellow-500',
+            'Moderate (Contagious)': 'bg-red-500', 'Sedang (Menular)': 'bg-red-500'
         };
-        // Default to blue if unknown
         const sevColor = severityMap[result.severity] || 'bg-blue-500';
 
-        severityIndicator.className = `w-3 h-3 rounded-full ${sevColor}`;
+        severityIndicator.className = `w-2.5 h-2.5 rounded-full ${sevColor}`;
         severityText.textContent = result.severity;
-
-        // Action
         actionText.textContent = result.action;
 
         // 5. Probability Bars
         probabilityBars.innerHTML = '';
 
-        // Find max prob for relative scaling if needed, but 0-100 is standard
         result.sorted_probs.forEach((item, index) => {
             const [name, prob] = item;
             const percentage = (prob * 100).toFixed(1);
-
-            // Color logic: Use specific class color
-            const color = result.class_colors[name] || '#64748b'; // Default to slate-500
+            const color = result.class_colors[name] || '#6b7280';
 
             const barHTML = `
                 <div class="flex items-center justify-between text-xs mb-1">
-                    <span class="font-medium text-slate-200 capitalize">${name}</span>
-                    <span class="text-slate-400">${percentage}%</span>
+                    <span class="font-medium text-gray-300 capitalize">${name}</span>
+                    <span class="text-gray-400 font-mono">${percentage}%</span>
                 </div>
-                <div class="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                <div class="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
                     <div class="h-full rounded-full transition-all duration-1000 ease-out" style="width: 0%; background-color: ${color}" data-width="${percentage}%"></div>
                 </div>
             `;
@@ -210,18 +271,16 @@ document.addEventListener('DOMContentLoaded', () => {
             div.innerHTML = barHTML;
             probabilityBars.appendChild(div);
 
-            // Trigger animation
             setTimeout(() => {
                 div.querySelector('div[data-width]').style.width = percentage + '%';
-            }, 100 + (index * 100)); // Stagger animations
+            }, 100 + (index * 100));
         });
 
         // Show Content
         resultContent.classList.remove('hidden');
     }
 
-    // 4. Tabs & Language (Simple implementation)
-    // Language Toggle
+    // 4. Language Toggle
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const lang = e.target.getAttribute('data-lang');
@@ -234,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 const data = await response.json();
                 if (data.success) {
-                    location.reload(); // Simplest way to refresh translations
+                    location.reload();
                 }
             } catch (err) {
                 console.error(err);
@@ -242,29 +301,25 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Tab Switching
+    // 5. Tab Switching
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            // Remove active class from all buttons
             document.querySelectorAll('.tab-btn').forEach(b => {
-                b.classList.remove('text-blue-600', 'border-b-2', 'border-blue-600', 'bg-white');
-                b.classList.add('text-slate-500', 'hover:text-slate-700');
+                b.classList.remove('text-blue-400', 'border-b-2', 'border-blue-500', 'bg-white/[0.02]');
+                b.classList.add('text-gray-500');
             });
 
-            // Add active to clicked
-            e.target.classList.remove('text-slate-500', 'hover:text-slate-700');
-            e.target.classList.add('text-blue-600', 'border-b-2', 'border-blue-600', 'bg-white');
+            e.target.classList.remove('text-gray-500');
+            e.target.classList.add('text-blue-400', 'border-b-2', 'border-blue-500', 'bg-white/[0.02]');
 
-            // Hide all contents
             document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
 
-            // Show target
             const tabId = e.target.getAttribute('data-tab');
             document.getElementById(`tab-${tabId}`).classList.remove('hidden');
         });
     });
 
-    // Load Examples (Stub)
+    // 6. Load Examples
     loadExamples();
 
     async function loadExamples() {
@@ -277,22 +332,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.examples && data.examples.length > 0) {
                 data.examples.forEach(ex => {
                     const div = document.createElement('div');
-                    div.className = 'group relative aspect-square rounded-lg overflow-hidden cursor-pointer bg-slate-100 hover:shadow-lg transition-all';
+                    div.className = 'group relative aspect-square rounded-xl overflow-hidden cursor-pointer bg-gray-900 border border-white/5 hover:border-blue-500/30 transition-all';
                     div.innerHTML = `
-                        <img src="${ex.url}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="${ex.class}">
-                        <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2 text-center">
-                            <span class="text-white text-xs font-bold uppercase tracking-wider">${ex.class}</span>
+                        <img src="${ex.url}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="${ex.class}">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center p-2">
+                            <span class="text-white text-[10px] font-bold uppercase tracking-wider">${ex.class}</span>
                         </div>
                     `;
-                    // Add click handler to auto-load example
                     div.addEventListener('click', async () => {
-                        // Convert URL to Blob to simulate file upload
                         try {
                             const imgRes = await fetch(ex.url);
                             const blob = await imgRes.blob();
                             const file = new File([blob], `${ex.class}.jpg`, { type: 'image/jpeg' });
                             handleFile(file);
-                            // Scroll up
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                         } catch (e) {
                             console.error("Failed to load example", e);
@@ -302,7 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     grid.appendChild(div);
                 });
             } else {
-                grid.innerHTML = '<p class="col-span-full text-slate-400 text-center">No examples found.</p>';
+                grid.innerHTML = '<p class="col-span-full text-gray-500 text-center text-sm py-8">No examples found.</p>';
             }
         } catch (e) {
             console.error(e);
