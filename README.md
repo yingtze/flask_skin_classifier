@@ -10,6 +10,7 @@ A Flask-based web application for classifying skin diseases using YOLOv8 deep le
 - **5 Disease Classes**: Acne, Eczema, Herpes, Tinea Versicolor (Panu), and Rosacea
 - **99.34% Accuracy**: High-performance YOLOv8 model
 - **Beautiful UI**: Modern, responsive design with dark theme
+- **Secure File Handling**: Auto-renaming of uploads and automatic cleanup after 1 hour
 
 ## Installation
 
@@ -18,10 +19,16 @@ A Flask-based web application for classifying skin diseases using YOLOv8 deep le
 cd flask_skin_classifier
 ```
 
-2. **Create a virtual environment** (recommended):
+2. **Create a virtual environment** (requires Python 3.10):
 ```bash
-python -m venv venv
+python3.10 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+Alternatively, using Conda:
+```bash
+conda create -n flask_skin_classifier python=3.10 -y
+conda activate flask_skin_classifier
 ```
 
 3. **Install dependencies**:
@@ -116,6 +123,7 @@ You can customize the application by editing `config.py`:
 - `CLASS_NAMES`: List of disease classes
 - `CLASS_COLORS`: Color scheme for each class
 - `TRANSLATIONS`: Multi-language text content
+- `UPLOAD_RETENTION_MINUTES`: Time in minutes before old uploads are automatically deleted (default: 60)
 
 ## Technologies Used
 

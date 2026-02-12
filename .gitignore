@@ -150,3 +150,5 @@ models/*.pth
 models/*.keras
 models/*.onnx
 !models/.keep
+
+static/uploads/*

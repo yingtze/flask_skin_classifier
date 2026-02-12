@@ -194,18 +194,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const [name, prob] = item;
             const percentage = (prob * 100).toFixed(1);
 
-            // Color logic: Top 1 gets primary color, others gray
-            const isTop = index === 0;
-            const barColor = isTop ? 'bg-blue-500' : 'bg-slate-600';
-            const width = Math.max(percentage, 5); // Min 5% width for visibility
+            // Color logic: Use specific class color
+            const color = result.class_colors[name] || '#64748b'; // Default to slate-500
 
             const barHTML = `
                 <div class="flex items-center justify-between text-xs mb-1">
-                    <span class="font-medium ${isTop ? 'text-slate-100' : 'text-slate-400'} capitalize">${name}</span>
+                    <span class="font-medium text-slate-200 capitalize">${name}</span>
                     <span class="text-slate-400">${percentage}%</span>
                 </div>
                 <div class="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
-                    <div class="h-full ${barColor} rounded-full transition-all duration-1000 ease-out" style="width: 0%" data-width="${percentage}%"></div>
+                    <div class="h-full rounded-full transition-all duration-1000 ease-out" style="width: 0%; background-color: ${color}" data-width="${percentage}%"></div>
                 </div>
             `;
             const div = document.createElement('div');

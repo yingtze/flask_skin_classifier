@@ -194,10 +194,11 @@ def predict():
         # Trigger cleanup in background
         threading.Thread(target=cleanup_old_uploads).start()
 
-        # Secure Rename: short unique ID (e.g. upload_a1b2c3d4.jpg)
+        # Secure Rename: timestamp based ID (e.g. upload_1700000000_a1b2.jpg)
         original_ext = file.filename.rsplit('.', 1)[1].lower()
-        short_id = uuid.uuid4().hex[:8]
-        unique_filename = f"upload_{short_id}.{original_ext}"
+        timestamp = int(time.time())
+        unique_id = uuid.uuid4().hex[:4]
+        unique_filename = f"upload_{timestamp}_{unique_id}.{original_ext}"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
         
         file.save(filepath)
