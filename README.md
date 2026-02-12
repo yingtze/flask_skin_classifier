@@ -481,12 +481,24 @@ curl http://localhost:5000/examples
 
 | Atribut | Nilai |
 |---------|-------|
-| **Arsitektur** | YOLOv8 Small (Classification) |
+| **Arsitektur** | YOLOv8 Small (CNN-Based) |
 | **Format** | ONNX (recommended), PyTorch |
 | **Ukuran File** | ~50MB (ONNX), ~25MB (PT) |
 | **Input Size** | 224×224 pixels |
 | **Output** | 5 class probabilities |
 | **Inference Time** | ~50-100ms per image |
+
+### Cara Mendapatkan Model
+
+Model **TIDAK** disertakan dalam repository ini karena batasan ukuran file.
+
+**Opsi 1: Cek folder `models/` (Distribusi Lengkap)**
+Jika Anda mengunduh full release, cek folder `models/`. Jika ada file `best-skin.pt` atau `yolo-skin.onnx`, Anda siap lanjut.
+
+**Opsi 2: Download dari Releases**
+1. Buka tab **[Releases](../../releases)** di repository GitHub.
+2. Download file model (`yolo-skin.onnx` atau `best-skin.pt`).
+3. Letakkan file tersebut di dalam folder `models/` di root project ini.
 
 ### Class Performance
 
