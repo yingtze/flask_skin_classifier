@@ -1,363 +1,388 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // --- Elements ---
-    const uploadArea = document.getElementById('upload-area');
-    const imageUpload = document.getElementById('image-upload');
-    const previewContainer = document.getElementById('preview-container');
-    const previewImage = document.getElementById('preview-image');
-    const uploadPlaceholder = document.getElementById('upload-placeholder');
-    const analyzeBtn = document.getElementById('analyze-btn');
-    const removeBtn = document.getElementById('remove-btn');
-    const scanOverlay = document.getElementById('scan-overlay');
+/**
+ * Logic Utama Aplikasi Skin Classifier
+ * Menggunakan Alpine.js untuk manajemen state reaktif.
+ * 
+ * Sistem:
+ * - State management: Menyimpan semua data aplikasi (gambar, hasil, status, bahasa)
+ * - Event handlers: Menangani upload, analisis, pembersihan
+ * - Helpers: Fungsi utilitas untuk UI, bahasa, dan visualisasi
+ * - Data loading: Mengambil contoh gambar dari server
+ */
 
-    // Result Elements
-    const emptyState = document.getElementById('empty-state');
-    const loadingState = document.getElementById('loading-state');
-    const resultContent = document.getElementById('result-content');
-    const diagnosisName = document.getElementById('diagnosis-name');
-    const diagnosisDesc = document.getElementById('diagnosis-desc');
-    const confidenceValue = document.getElementById('confidence-value');
-    const confidenceRing = document.getElementById('confidence-ring');
-    const severityIndicator = document.getElementById('severity-indicator');
-    const severityText = document.getElementById('severity-text');
-    const actionText = document.getElementById('action-text');
-    const probabilityBars = document.getElementById('probability-bars');
+function skinAnalyzer() {
+    return {
+        // ========== STATE UTAMA ==========
+        // Menyimpan informasi tentang gambar dan hasil analisis
+        
+        image: null,           // File object yang diunggah pengguna (File)
+        previewUrl: null,      // URL blob untuk menampilkan preview gambar (string)
+        result: null,          // Objek hasil analisis dari server API /predict (object)
+        status: 'idle',        // Status UI: 'idle' (menunggu), 'analyzing' (proses), 'success' (berhasil), 'error' (gagal)
+        lang: 'id',            // Bahasa aktif: 'id' (Indonesia) atau 'en' (English)
+        errorMsg: '',          // Pesan error yang ditampilkan jika terjadi kesalahan (string)
+        examples: [],          // Daftar contoh gambar dari server untuk galeri (array)
 
-    const CIRCUMFERENCE = 2 * Math.PI * 40;
-    confidenceRing.style.strokeDasharray = `${CIRCUMFERENCE} ${CIRCUMFERENCE}`;
-    confidenceRing.style.strokeDashoffset = CIRCUMFERENCE;
+        // ========== STATE UI TAMBAHAN ==========
+        // Kontrol tampilan berbagai elemen interface
+        
+        toast: {
+            show: false,       // Apakah notifikasi toast ditampilkan (boolean)
+            message: '',       // Teks pesan toast (string)
+            type: 'success'    // Tipe toast: 'success' atau 'error' (string)
+        },
+        tab: 'examples',       // Tab aktif: 'examples' (galeri contoh) atau 'info' (informasi model) (string)
+        percent: 0,            // Nilai progress ring confidence (0-100) untuk animasi (number)
 
-    // --- State ---
-    let currentFile = null;
+        // ========== KONFIGURASI ==========
+        // Konstanta untuk perhitungan visual
+        
+        circumference: 2 * Math.PI * 40, // Keliling lingkaran progress ring (R=40) ≈ 251.2 px (number)
 
-    // --- Event Listeners ---
+        // ========== INISIALISASI ==========
+        // Dijalankan ketika komponen Alpine.js dimuat di DOM
+        
+        init() {
+            console.log('⚙️ Skin Analyzer Alpine Component Initialized');
+            this.loadExamples(); // Ambil daftar contoh gambar saat aplikasi dimulai
+        },
 
-    // 1. Upload Interaction
-    uploadArea.addEventListener('click', () => imageUpload.click());
+        // ========== SISTEM BAHASA (i18n) ==========
+        // Mengambil teks terjemahan berdasarkan kunci dot-notation
+        // Sistem ini memungkinkan dukungan multi-bahasa tanpa hardcoded strings
+        
+        /**
+         * Mengambil teks terjemahan berdasarkan kunci
+         * @param {string} key - Kunci terjemahan dengan dot notation (misal: 'tabs.examples')
+         * @return {string} Teks terjemahan dalam bahasa aktif (this.lang)
+         */
+        t(key) {
+            // Split kunci dengan pemisah titik untuk nested access
+            // Contoh: 'classes.acne' → ['classes', 'acne']
+            const keys = key.split('.');
+            let value = translations[this.lang]; // Ambil object bahasa aktif dari translations.js
 
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.classList.add('drag-over');
-    });
+            // Traverse melalui setiap level nested menggunakan loop
+            for (const k of keys) {
+                if (value && value[k] !== undefined) {
+                    value = value[k]; // Lanjut ke level berikutnya
+                } else {
+                    return key; // Fallback: return kunci asli jika tidak ditemukan
+                }
+            }
+            return value;
+        },
 
-    uploadArea.addEventListener('dragleave', () => {
-        uploadArea.classList.remove('drag-over');
-    });
+        // ========== LOGIKA UPLOAD FILE ==========
+        // Menangani pengunggahan gambar dari pengguna
+        
+        /**
+         * Handler untuk perubahan input file
+         * Dipanggil ketika pengguna memilih file dari dialog atau drag-drop
+         * @param {Event} event - Event dari input type="file" atau drop event
+         */
+        handleUpload(event) {
+            // Ambil file pertama dari file list (pengguna hanya bisa pilih 1)
+            const file = event.target.files ? event.target.files[0] : null;
+            this.processFile(file);
+        },
 
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove('drag-over');
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            handleFile(e.dataTransfer.files[0]);
-        }
-    });
+        /**
+         * Handler untuk drag-drop file
+         * Dipanggil ketika pengguna melepas file di area upload
+         * @param {DragEvent} event - Event dari @drop directive
+         */
+        handleDrop(event) {
+            // Ambil file yang di-drop (hanya file pertama)
+            const file = event.dataTransfer.files ? event.dataTransfer.files[0] : null;
+            this.processFile(file);
+        },
 
-    imageUpload.addEventListener('change', (e) => {
-        if (e.target.files && e.target.files[0]) {
-            handleFile(e.target.files[0]);
-        }
-    });
+        /**
+         * Proses file yang dipilih/di-drop
+         * Melakukan validasi dan membuat preview URL
+         * @param {File} file - Objek File untuk diproses
+         */
+        processFile(file) {
+            if (!file) return; // Abaikan jika tidak ada file
 
-    function handleFile(file) {
-        if (!file.type.match('image.*')) {
-            alert('Please upload an image file (JPG, PNG).');
-            return;
-        }
-
-        currentFile = file;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            previewImage.src = e.target.result;
-            previewContainer.classList.remove('hidden');
-            uploadPlaceholder.classList.add('opacity-0');
-            resetResults();
-        };
-        reader.readAsDataURL(file);
-    }
-
-    // 2. Analyze
-    analyzeBtn.addEventListener('click', async () => {
-        if (!currentFile) {
-            alert('Please select an image first.');
-            return;
-        }
-
-        setLoading(true);
-
-        const formData = new FormData();
-        formData.append('file', currentFile);
-
-        try {
-            const response = await fetch('/predict', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || 'Prediction failed');
+            // Validasi tipe file harus gambar (JPG/PNG)
+            if (!file.type.match('image.*')) {
+                this.showToast('File must be an image (JPG/PNG)', 'error');
+                return;
             }
 
-            const data = await response.json();
-            if (data.success) {
-                displayResults(data.result);
-            } else {
-                throw new Error(data.error || 'Unknown error');
+            // Simpan file dan buat blob URL untuk preview
+            this.image = file;
+            // URL.createObjectURL lebih efisien daripada FileReader base64
+            // karena tidak perlu encoding dan lebih cepat rendering
+            this.previewUrl = URL.createObjectURL(file);
+
+            // Reset hasil analisis sebelumnya saat gambar baru diunggah
+            // Ini memastikan pengguna tidak melihat hasil lama
+            this.resetAnalysisState();
+        },
+
+        // ========== LOGIKA HAPUS GAMBAR ==========
+        // Menghapus gambar yang diunggah dan reset semua state terkait
+        
+        /**
+         * Menghapus gambar preview dan reset ke status awal
+         * Dipanggil ketika pengguna klik tombol remove (X) pada preview
+         * Lifecycle:
+         *   1. Bersihkan memory blob URL (URL.revokeObjectURL)
+         *   2. Reset semua state ke nilai awal
+         *   3. Kosongkan value input file
+         *   4. Tampilkan notifikasi toast
+         */
+        removeImage() {
+            // Bersihkan memori dengan revoke object URL yang tidak lagi digunakan
+            // Ini mencegah memory leak jika aplikasi berjalan lama
+            if (this.previewUrl) {
+                URL.revokeObjectURL(this.previewUrl);
             }
-        } catch (error) {
-            alert(error.message);
-            setLoading(false);
-        }
-    });
 
-    // 3. Remove Image
-    removeBtn.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent opening upload dialog
-        removeImage();
-    });
+            // Reset nilai state ke null/awal
+            this.image = null;           // Hapus referensi file
+            this.previewUrl = null;      // Hapus preview URL
+            this.reset();                // Reset status ke 'idle' dan hasil ke null
 
-    // Keyboard support for remove button
-    removeBtn.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            removeImage();
-        }
-    });
+            // Kosongkan value input file agar file yang sama bisa diupload ulang
+            // Tanpa ini, jika pengguna upload file yang sama, tidak ada change event
+            const fileInput = document.getElementById('image-upload');
+            if (fileInput) {
+                fileInput.value = '';
+            }
 
-    function removeImage() {
-        if (!currentFile && !previewImage.src) return;
+            // Tampilkan notifikasi bahwa gambar telah dihapus
+            this.showToast(this.t('toast_removed'), 'success');
+        },
 
-        // Reset State
-        currentFile = null;
-        imageUpload.value = ''; // Clear file input (critical for re-uploading same file)
+        // ========== LOGIKA ANALISIS ==========
+        // Menjalankan prediksi AI di server
+        
+        /**
+         * Menjalankan analisis gambar via API /predict
+         * Mengirim gambar ke backend untuk mendapatkan prediksi penyakit kulit
+         * Lifecycle:
+         *   1. Set status ke 'analyzing' untuk tampil loading UI
+         *   2. POST gambar sebagai FormData ke endpoint /predict
+         *   3. Parse response dan simpan di this.result
+         *   4. Animate progress ring confidence score
+         *   5. Transition status ke 'success' atau 'error'
+         */
+        async analyze() {
+            if (!this.image) return; // Abaikan jika tidak ada gambar
 
-        // Reset UI with animation
-        previewImage.classList.add('scale-95', 'opacity-0');
+            // Set status ke 'analyzing' untuk trigger loading animation
+            this.status = 'analyzing';
+            this.errorMsg = '';
 
-        setTimeout(() => {
-            previewImage.src = '';
-            previewImage.classList.remove('scale-95', 'opacity-0');
-            previewContainer.classList.add('hidden');
-            uploadPlaceholder.classList.remove('opacity-0');
-
-            // Show Toast
-            showToast('Image removed. Ready for new upload.');
-        }, 200);
-
-        // Deep Reset of Analysis
-        resetResults();
-        setLoading(false);
-    }
-
-    // Toast Logic
-    const toastContainer = document.getElementById('toast-container');
-    const toastMessage = document.getElementById('toast-message');
-    let toastTimeout;
-
-    window.hideToast = function () {
-        toastContainer.classList.add('translate-x-full', 'opacity-0');
-    }
-
-    function showToast(msg) {
-        toastMessage.textContent = msg;
-        toastContainer.classList.remove('translate-x-full', 'opacity-0');
-
-        clearTimeout(toastTimeout);
-        toastTimeout = setTimeout(() => {
-            hideToast();
-        }, 3000);
-    }
-
-    // 4. UI Helpers
-    function setLoading(isLoading) {
-        if (isLoading) {
-            analyzeBtn.disabled = true;
-            analyzeBtn.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processing...';
-
-            scanOverlay.classList.remove('hidden');
-
-            emptyState.classList.add('hidden');
-            resultContent.classList.add('hidden');
-            loadingState.classList.remove('hidden');
-        } else {
-            analyzeBtn.disabled = false;
-            analyzeBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg><span>Analyze</span>`;
-
-            scanOverlay.classList.add('hidden');
-            loadingState.classList.add('hidden');
-        }
-    }
-
-    function resetResults() {
-        // Hide results
-        emptyState.classList.remove('hidden');
-        resultContent.classList.add('hidden');
-        loadingState.classList.add('hidden');
-
-        // Deep Clean Text & Values
-        confidenceValue.textContent = '0%';
-        setProgress(0);
-
-        diagnosisName.textContent = 'Diagnosis Name';
-        diagnosisDesc.textContent = 'Description will appear here after analysis.';
-
-        severityText.textContent = '-';
-        severityIndicator.className = 'w-2.5 h-2.5 rounded-full bg-gray-600';
-
-        actionText.textContent = '-';
-
-        probabilityBars.innerHTML = ''; // Clear prior bars
-    }
-
-    function setProgress(percent) {
-        const offset = CIRCUMFERENCE - (percent / 100) * CIRCUMFERENCE;
-        confidenceRing.style.strokeDashoffset = offset;
-    }
-
-    function displayResults(result) {
-        setLoading(false);
-
-        // 1. Confidence
-        let rawConf = parseFloat(result.confidence) * 100;
-        let displayConf = rawConf;
-
-        if (rawConf > 99.0) {
-            displayConf = 99;
-            confidenceValue.innerHTML = `99<span class="text-xs align-top">+</span>%`;
-        } else {
-            confidenceValue.textContent = `${displayConf.toFixed(1)}%`;
-        }
-
-        // 2. Animate Ring
-        setTimeout(() => setProgress(displayConf), 100);
-
-        // 3. Text
-        diagnosisName.textContent = result.name;
-        diagnosisDesc.textContent = result.description;
-
-        // 4. Badges
-        const severityMap = {
-            'Mild': 'bg-green-500', 'Ringan': 'bg-green-500',
-            'Moderate': 'bg-yellow-500', 'Sedang': 'bg-yellow-500',
-            'Severe': 'bg-red-500', 'Parah': 'bg-red-500',
-            'Variable': 'bg-blue-500', 'Bervariasi': 'bg-blue-500',
-            'Chronic': 'bg-orange-500', 'Kronis': 'bg-orange-500',
-            'Moderate to Chronic': 'bg-yellow-500', 'Sedang hingga Kronis': 'bg-yellow-500',
-            'Moderate (Contagious)': 'bg-red-500', 'Sedang (Menular)': 'bg-red-500'
-        };
-        const sevColor = severityMap[result.severity] || 'bg-blue-500';
-
-        severityIndicator.className = `w-2.5 h-2.5 rounded-full ${sevColor}`;
-        severityText.textContent = result.severity;
-        actionText.textContent = result.action;
-
-        // 5. Probability Bars
-        probabilityBars.innerHTML = '';
-
-        result.sorted_probs.forEach((item, index) => {
-            const [name, prob] = item;
-            const percentage = (prob * 100).toFixed(1);
-            const color = result.class_colors[name] || '#6b7280';
-
-            const barHTML = `
-                <div class="flex items-center justify-between text-xs mb-1">
-                    <span class="font-medium text-gray-300 capitalize">${name}</span>
-                    <span class="text-gray-400 font-mono">${percentage}%</span>
-                </div>
-                <div class="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
-                    <div class="h-full rounded-full transition-all duration-1000 ease-out" style="width: 0%; background-color: ${color}" data-width="${percentage}%"></div>
-                </div>
-            `;
-            const div = document.createElement('div');
-            div.innerHTML = barHTML;
-            probabilityBars.appendChild(div);
-
-            setTimeout(() => {
-                div.querySelector('div[data-width]').style.width = percentage + '%';
-            }, 100 + (index * 100));
-        });
-
-        // Show Content
-        resultContent.classList.remove('hidden');
-    }
-
-    // 4. Language Toggle
-    document.querySelectorAll('.lang-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            const lang = e.target.getAttribute('data-lang');
+            // Buat FormData untuk mengirim file (required untuk upload)
+            const formData = new FormData();
+            formData.append('file', this.image);
 
             try {
-                const response = await fetch('/set_language', {
+                // POST ke endpoint /predict di backend Flask
+                const response = await fetch('/predict', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ lang })
+                    body: formData
+                    // Note: Jangan set Content-Type header, browser akan set boundary otomatis
                 });
-                const data = await response.json();
-                if (data.success) {
-                    location.reload();
+
+                // Validasi response dari server
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || 'Prediction failed');
                 }
-            } catch (err) {
-                console.error(err);
+
+                // Parse JSON response
+                const data = await response.json();
+
+                // Handle success response
+                if (data.success) {
+                    // Simpan hasil analisis lengkap (nama, deskripsi, confidence, dll)
+                    this.result = data.result;
+                    this.status = 'success';
+
+                    // Animate progress ring dengan transisi smooth
+                    // Timeout kecil agar CSS transition berjalan (stroke-dashoffset change)
+                    setTimeout(() => {
+                        this.percent = parseFloat(this.result.confidence) * 100;
+                    }, 100);
+                } else {
+                    throw new Error(data.error || 'Unknown error');
+                }
+
+            } catch (error) {
+                // Handle error - log ke console dan tampilkan ke pengguna
+                console.error('❌ Analysis error:', error);
+                this.status = 'error';
+                this.errorMsg = error.message;
+                this.showToast(error.message, 'error');
             }
-        });
-    });
+        },
 
-    // 5. Tab Switching
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            document.querySelectorAll('.tab-btn').forEach(b => {
-                b.classList.remove('text-blue-400', 'border-b-2', 'border-blue-500', 'bg-white/[0.02]');
-                b.classList.add('text-gray-500');
-            });
+        // ========== MANAJEMEN STATUS ==========
+        // Fungsi untuk mengubah status aplikasi
+        
+        /**
+         * Reset semua state ke kondisi awal (idle)
+         * Digunakan setelah analisis selesai atau pengguna hapus gambar
+         */
+        reset() {
+            this.status = 'idle';     // Kembali ke status menunggu
+            this.result = null;       // Hapus hasil analisis
+            this.percent = 0;         // Reset progress ring
+            this.errorMsg = '';       // Hapus pesan error
+        },
 
-            e.target.classList.remove('text-gray-500');
-            e.target.classList.add('text-blue-400', 'border-b-2', 'border-blue-500', 'bg-white/[0.02]');
+        /**
+         * Reset hanya hasil analisis, tidak reset gambar
+         * Berbeda dengan reset(), ini gunakan jika pengguna upload gambar baru
+         * tapi ingin tetap membuat preview gambar lama hilang
+         */
+        resetAnalysisState() {
+            this.status = 'idle';     // Set status ke idle
+            this.result = null;       // Hapus hasil sebelumnya
+            this.percent = 0;         // Reset progress ring
+            // Note: Tidak reset image dan previewUrl, masih ada untuk upload berikutnya
+        },
 
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+        // ========== UTILITAS UI ==========
+        // Helper functions untuk interaksi UI
+        
+        /**
+         * Toggle bahasa aplikasi antara Indonesia dan English
+         * @param {string} newLang - Bahasa tujuan: 'id' atau 'en'
+         */
+        toggleLang(newLang) {
+            this.lang = newLang; // Ubah bahasa aktif
+            // Alpine.js otomatis re-render semua text yang menggunakan x-text="t(...)"
+        },
 
-            const tabId = e.target.getAttribute('data-tab');
-            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
-        });
-    });
+        /**
+         * Tampilkan notifikasi toast dengan pesan dan tipe
+         * Toast akan otomatis hilang setelah 3 detik
+         * @param {string} message - Teks notifikasi
+         * @param {string} type - Tipe notifikasi: 'success' atau 'error' (default: 'success')
+         */
+        showToast(message, type = 'success') {
+            this.toast.message = message;
+            this.toast.type = type;
+            this.toast.show = true;
 
-    // 6. Load Examples
-    loadExamples();
+            // Auto-hide toast setelah 3 detik
+            setTimeout(() => {
+                this.toast.show = false;
+            }, 3000);
+        },
 
-    async function loadExamples() {
-        try {
-            const res = await fetch('/examples');
-            const data = await res.json();
-            const grid = document.getElementById('examples-grid');
-            grid.innerHTML = '';
+        // ========== HELPERS VISUALISASI ==========
+        // Fungsi untuk menghitung dan mendeteksi nilai untuk CSS/SVG
+        
+        /**
+         * Hitung stroke-dashoffset untuk progress ring confidence
+         * Nilai ini mengontrol berapa persen lingkaran yang "terisi"
+         * Formula: offset = circumference - (percent/100 * circumference)
+         * @return {number} Dashoffset dalam pixel
+         */
+        getConfidenceDashOffset() {
+            // Circumference = 2 * PI * R = 2 * PI * 40 ≈ 251.2 px
+            const max = this.circumference;
+            // Hitung offset berdasarkan percent (0-100)
+            return max - (this.percent / 100) * max;
+        },
 
-            if (data.examples && data.examples.length > 0) {
-                data.examples.forEach(ex => {
-                    const div = document.createElement('div');
-                    div.className = 'group relative aspect-square rounded-xl overflow-hidden cursor-pointer bg-gray-900 border border-white/5 hover:border-blue-500/30 transition-all';
-                    div.innerHTML = `
-                        <img src="${ex.url}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="${ex.class}">
-                        <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center p-2">
-                            <span class="text-white text-[10px] font-bold uppercase tracking-wider">${ex.class}</span>
-                        </div>
-                    `;
-                    div.addEventListener('click', async () => {
-                        try {
-                            const imgRes = await fetch(ex.url);
-                            const blob = await imgRes.blob();
-                            const file = new File([blob], `${ex.class}.jpg`, { type: 'image/jpeg' });
-                            handleFile(file);
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                        } catch (e) {
-                            console.error("Failed to load example", e);
-                        }
-                    });
+        /**
+         * Get warna badge berdasarkan severity level
+         * Mapping: Mild=hijau, Moderate=kuning, Severe=merah, dll
+         * Support bahasa Indonesia dan English
+         * @param {string} severity - Teks severity dari result API
+         * @return {string} Tailwind class color (misal: 'bg-green-500')
+         */
+        getSeverityColor(severity) {
+            const map = {
+                'Mild': 'bg-green-500',
+                'Ringan': 'bg-green-500',
+                'Moderate': 'bg-yellow-500',
+                'Sedang': 'bg-yellow-500',
+                'Severe': 'bg-red-500',
+                'Parah': 'bg-red-500',
+                'Variable': 'bg-blue-500',
+                'Bervariasi': 'bg-blue-500',
+                'Chronic': 'bg-orange-500',
+                'Kronis': 'bg-orange-500'
+            };
+            return map[severity] || 'bg-blue-500'; // Default jika severity tidak dikenal
+        },
 
-                    grid.appendChild(div);
-                });
-            } else {
-                grid.innerHTML = '<p class="col-span-full text-gray-500 text-center text-sm py-8">No examples found.</p>';
+        /**
+         * Get warna untuk probability bar setiap class (penyakit)
+         * Warna diambil dari response server (class_colors mapping)
+         * @param {string} className - Nama class/penyakit (acne, eksim, herpes, dll)
+         * @return {string} Hex color code (misal: '#ef4444' untuk acne)
+         */
+        getClassColor(className) {
+            // Cek apakah server mengirim color mapping untuk class ini
+            if (this.result && this.result.class_colors && this.result.class_colors[className]) {
+                return this.result.class_colors[className];
             }
-        } catch (e) {
-            console.error(e);
+            // Fallback ke warna default jika tidak ada mapping
+            return '#64748b'; // Slate-500
+        },
+
+        // ========== LOADING DATA EKSTERNAL ==========
+        // Fungsi untuk mengambil data dari server API
+        
+        /**
+         * Muat daftar contoh gambar dari server
+         * Dipanggil di init() saat aplikasi pertama kali load
+         * Endpoint: GET /examples
+         * Response: { examples: [{ url: '...', class: 'acne' }, ...] }
+         */
+        async loadExamples() {
+            try {
+                // Fetch contoh gambar dari backend
+                const res = await fetch('/examples');
+                const data = await res.json();
+                
+                // Jika response berhasil, simpan array contoh
+                if (data.examples) {
+                    this.examples = data.examples;
+                    console.log(`✅ Loaded ${data.examples.length} example images`);
+                }
+            } catch (e) {
+                // Log error tapi jangan menggangu UX (galeri bisa kosong)
+                console.error("❌ Failed to load examples:", e);
+            }
+        },
+
+        /**
+         * Muat contoh gambar dan process sebagai file untuk preview
+         * Dipanggil ketika pengguna klik salah satu contoh di galeri
+         * @param {string} url - URL gambar contoh
+         * @param {string} className - Nama class untuk nama file
+         */
+        async loadExampleImage(url, className) {
+            try {
+                // Fetch blob dari URL gambar contoh
+                const response = await fetch(url);
+                const blob = await response.blob();
+                
+                // Buat File object dari blob
+                const file = new File([blob], `${className}.jpg`, { type: "image/jpeg" });
+                
+                // Process file seperti upload normal
+                this.processFile(file);
+                
+                // Scroll ke atas agar pengguna langsung lihat preview dan tombol analyze
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (e) {
+                // Tampilkan error ke pengguna
+                this.showToast("Gagal memuat gambar contoh", 'error');
+                console.error(e);
+            }
         }
-    }
-});
+    };
+}
+

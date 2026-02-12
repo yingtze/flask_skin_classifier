@@ -1,17 +1,27 @@
-/* Custom CSS for Dark Mode UI */
+/* Custom CSS untuk Dark Mode UI Aplikasi Skin Classifier */
 
 :root {
-  --bg-primary: #0b1120;
-  --bg-card: #111827;
-  --bg-elevated: #1a2332;
+  /* Skala Warna Latar Belakang */
+  --bg-primary: #0b1120;        /* Latar utama (sangat gelap) */
+  --bg-card: #111827;           /* Latar kartu konten */
+  --bg-elevated: #1a2332;       /* Latar elevated state */
+  
+  /* Skala Warna Teks - Mengikuti standar WCAG AA untuk kontras minimal 4.5:1 */
+  --text-primary: #f3f4f6;      /* Teks utama - text-slate-100 (sangat terang) */
+  --text-secondary: #cbd5e1;    /* Teks sekunder - text-slate-300 (kontras kuat) */
+  --text-muted: #94a3b8;        /* Teks muted/placeholder - text-slate-400 */
+  
+  /* Garis Pemisah */
   --border-subtle: rgba(255, 255, 255, 0.05);
-  --text-primary: #f3f4f6;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
-  --accent-blue: #3b82f6;
+  
+  /* Aksen Warna */
+  --accent-blue: #3b82f6;       /* Warna primary untuk tombol dan highlight */
 }
 
-/* Scan Animation */
+/* ========== ANIMASI SCAN ==========
+   Digunakan saat proses analisis gambar sedang berlangsung
+   Efek dari atas ke bawah dengan gradien biru
+*/
 @keyframes scan {
   0% { top: 0%; opacity: 0; }
   10% { opacity: 1; }
@@ -31,7 +41,9 @@
   pointer-events: none;
 }
 
-/* Pulse Ring */
+/* ========== ANIMASI PULSE RING ==========
+   Digunakan untuk loading state dengan effect pulse melingkar
+*/
 @keyframes pulse-ring {
   0% { transform: scale(0.8); opacity: 0.5; }
   100% { transform: scale(2); opacity: 0; }
@@ -54,14 +66,20 @@
   animation: pulse-ring 2s infinite;
 }
 
-/* Circular Progress */
+/* ========== PROGRESS RING UNTUK CONFIDENCE SCORE ==========
+   SVG stroke dash animation untuk progress ring confidence
+   Transisi smooth dengan durasi 1 detik
+*/
 .progress-ring__circle {
   transition: stroke-dashoffset 1s ease-in-out;
   transform: rotate(-90deg);
   transform-origin: 50% 50%;
 }
 
-/* Scrollbar */
+/* ========== SCROLLBAR STYLING ==========
+   Custom scrollbar untuk tetap konsisten dengan dark theme
+   Gunakan opacity untuk perpaduan natural dengan background
+*/
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -80,14 +98,19 @@
   background: rgba(255, 255, 255, 0.15);
 }
 
-/* Upload Drag State */
+/* ========== DRAG-DROP STATE ==========
+   Styling saat user drag file ke upload area
+*/
 .drag-over {
   border-color: #3b82f6 !important;
   background-color: rgba(59, 130, 246, 0.05) !important;
 }
 
-/* No Select */
+/* ========== UTILITY CLASSES ==========
+   Untuk helper styling yang sering digunakan
+*/
 .no-select {
   user-select: none;
   -webkit-user-select: none;
 }
+
